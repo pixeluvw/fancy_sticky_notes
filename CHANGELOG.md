@@ -1,3 +1,11 @@
+## 0.2.1
+
+* Fixed text editing — TextField now receives all input when in editing mode
+* Fixed StyledTextController crash on text input (growable list)
+* Fixed style array sync using prefix/suffix diff algorithm
+* Bullet list now works per-selection (mix regular text with bullet items)
+* Toolbar inherits parent note color
+
 ## 0.2.0
 
 * Added `StyledTextController` for per-selection inline formatting (bold, italic, underline, strikethrough)

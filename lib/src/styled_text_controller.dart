@@ -23,7 +23,7 @@ class StyledTextController extends TextEditingController {
   List<int> _styles;
 
   StyledTextController({String text = ''})
-      : _styles = List.filled(text.length, 0),
+      : _styles = List.filled(text.length, 0, growable: true),
         super(text: text);
 
   // ── Value override to track insertions / deletions ─────────────────
@@ -33,27 +33,45 @@ class StyledTextController extends TextEditingController {
     final oldText = super.value.text;
     final newText = newValue.text;
 
-    if (oldText.length != newText.length) {
-      _adjustStyles(oldText.length, newText.length, newValue.selection);
+    if (oldText != newText) {
+      _adjustStyles(oldText, newText, newValue.selection);
     }
 
     super.value = newValue;
   }
 
-  void _adjustStyles(int oldLen, int newLen, TextSelection newSel) {
-    final delta = newLen - oldLen;
+  void _adjustStyles(String oldText, String newText, TextSelection newSel) {
+    final oldLen = oldText.length;
+    final newLen = newText.length;
 
-    if (delta > 0) {
-      // Insertion — put empty style entries at the insertion point
-      final insertAt = (newSel.baseOffset - delta).clamp(0, _styles.length);
-      _styles.insertAll(insertAt, List.filled(delta, 0));
-    } else if (delta < 0) {
-      // Deletion — remove entries from the cursor position
-      final deleteAt = newSel.baseOffset.clamp(0, _styles.length);
-      final end = (deleteAt - delta).clamp(deleteAt, _styles.length);
-      if (deleteAt < end) {
-        _styles.removeRange(deleteAt, end);
-      }
+    // Find common prefix and suffix to detect where the edit happened
+    int prefixLen = 0;
+    final minLen = oldLen < newLen ? oldLen : newLen;
+    while (prefixLen < minLen && oldText[prefixLen] == newText[prefixLen]) {
+      prefixLen++;
+    }
+
+    int oldSuffixStart = oldLen;
+    int newSuffixStart = newLen;
+    while (oldSuffixStart > prefixLen &&
+        newSuffixStart > prefixLen &&
+        oldText[oldSuffixStart - 1] == newText[newSuffixStart - 1]) {
+      oldSuffixStart--;
+      newSuffixStart--;
+    }
+
+    // Remove deleted characters' styles
+    if (oldSuffixStart > prefixLen) {
+      _styles.removeRange(prefixLen, oldSuffixStart.clamp(0, _styles.length));
+    }
+
+    // Insert empty styles for new characters
+    final insertCount = newSuffixStart - prefixLen;
+    if (insertCount > 0) {
+      _styles.insertAll(
+        prefixLen.clamp(0, _styles.length),
+        List.filled(insertCount, 0),
+      );
     }
 
     // Safety — always keep length in sync

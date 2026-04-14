@@ -219,35 +219,59 @@ class _StickyNoteBoardState extends State<StickyNoteBoard> {
 
   // ── Bullet list helpers ──────────────────────────────────────────────
 
+  /// Toggles bullet prefixes on the selected lines (or the current line
+  /// if no selection). Lines outside the selection are left unchanged,
+  /// so you can mix regular text with bullet items in the same note.
   void _toggleBulletList(StickyNoteModel note) {
     final ctrl = note.textController;
     if (ctrl == null) return;
 
-    setState(() {
-      note.bulletList = !note.bulletList;
-    });
+    final sel = ctrl.selection;
+    final text = ctrl.text;
 
-    if (note.bulletList) {
-      // Add bullets to each line
-      final lines = ctrl.text.split('\n');
-      final bulleted = lines.map((l) {
-        final trimmed = l.trimLeft();
-        if (trimmed.startsWith('• ')) return l;
-        return '• ${trimmed.isEmpty ? '' : trimmed}';
-      }).join('\n');
-      ctrl.text = bulleted;
-      ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
-    } else {
-      // Remove bullets from each line
-      final lines = ctrl.text.split('\n');
-      final plain = lines.map((l) {
-        final trimmed = l.trimLeft();
-        if (trimmed.startsWith('• ')) return trimmed.substring(2);
-        return trimmed;
-      }).join('\n');
-      ctrl.text = plain;
-      ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
-    }
+    // Find line range that overlaps the selection / cursor
+    final selStart = sel.isValid ? sel.start : text.length;
+    final selEnd = sel.isValid ? sel.end : text.length;
+
+    // Walk back to the start of the first affected line
+    int lineStart = text.lastIndexOf('\n', selStart > 0 ? selStart - 1 : 0);
+    lineStart = lineStart == -1 ? 0 : lineStart + 1;
+
+    // Walk forward to the end of the last affected line
+    int lineEnd = text.indexOf('\n', selEnd);
+    if (lineEnd == -1) lineEnd = text.length;
+
+    final before = text.substring(0, lineStart);
+    final affected = text.substring(lineStart, lineEnd);
+    final after = text.substring(lineEnd);
+
+    // Check if ALL affected lines already have bullets → remove; otherwise add
+    final lines = affected.split('\n');
+    final allBulleted = lines.every((l) => l.trimLeft().startsWith('• '));
+
+    final transformed = lines.map((l) {
+      final trimmed = l.trimLeft();
+      if (allBulleted) {
+        // Remove bullet
+        return trimmed.startsWith('• ') ? trimmed.substring(2) : trimmed;
+      } else {
+        // Add bullet
+        return trimmed.startsWith('• ') ? l : '• $trimmed';
+      }
+    }).join('\n');
+
+    final newText = before + transformed + after;
+    final cursorPos = (before.length + transformed.length).clamp(0, newText.length);
+
+    ctrl.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: cursorPos),
+    );
+
+    setState(() {
+      // Update the pill state based on whether any line in the note has bullets
+      note.bulletList = newText.split('\n').any((l) => l.trimLeft().startsWith('• '));
+    });
   }
 
   @override
@@ -445,6 +469,17 @@ class _FloatingToolbarState extends State<_FloatingToolbar> {
         _styledCtrl!.selection.isValid &&
         !_styledCtrl!.selection.isCollapsed;
 
+    // Derive toolbar background from note color — lighten and desaturate
+    final noteHsl = HSLColor.fromColor(note.color);
+    final toolbarBg = noteHsl
+        .withLightness((noteHsl.lightness * 0.3 + 0.7).clamp(0.0, 0.97))
+        .withSaturation((noteHsl.saturation * 0.4).clamp(0.0, 1.0))
+        .toColor();
+    final borderColor = noteHsl
+        .withLightness((noteHsl.lightness * 0.5 + 0.3).clamp(0.0, 0.85))
+        .withSaturation((noteHsl.saturation * 0.3).clamp(0.0, 1.0))
+        .toColor();
+
     return Material(
       elevation: 10,
       borderRadius: BorderRadius.circular(16),
@@ -452,9 +487,9 @@ class _FloatingToolbarState extends State<_FloatingToolbar> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFAFA),
+          color: toolbarBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: borderColor),
         ),
         child: IntrinsicWidth(
           child: Column(
@@ -525,7 +560,7 @@ class _FloatingToolbarState extends State<_FloatingToolbar> {
               // Divider between rows
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Container(height: 1, color: Colors.grey.shade200),
+                child: Container(height: 1, color: borderColor),
               ),
 
               // ══════════ Row 2 — Alignment, pills, rotation, lock ══════════

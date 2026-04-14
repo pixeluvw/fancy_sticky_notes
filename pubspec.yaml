@@ -1,6 +1,6 @@
 name: fancy_sticky_notes
 description: "Customizable sticky note widgets for Flutter with 10 visual styles, text formatting toolbar, drag, resize, rotation, and a board layout."
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/pixeluvw/fancy_sticky_notes
 issue_tracker: https://github.com/pixeluvw/fancy_sticky_notes/issues
 

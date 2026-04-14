@@ -311,14 +311,19 @@ class _StickyNoteState extends State<StickyNote> {
             // Leave room for the resize edge at the bottom so the two
             // GestureDetectors don't overlap.
             bottom: showResize ? _kResizeEdgeHeight : 0,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onDoubleTap: widget.onDoubleTap,
-              onPanStart: widget.isLocked ? null : _onBodyPanStart,
-              onPanUpdate: widget.isLocked ? null : _onBodyPanUpdate,
-              onPanEnd: widget.isLocked ? null : _onBodyPanEnd,
-              child: paintedBody,
-            ),
+            // When editing, disable drag/doubleTap so the TextField can
+            // handle taps (cursor), drags (selection), and double-taps
+            // (select word) without interference.
+            child: widget.isEditing
+                ? paintedBody
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: widget.onDoubleTap,
+                    onPanStart: widget.isLocked ? null : _onBodyPanStart,
+                    onPanUpdate: widget.isLocked ? null : _onBodyPanUpdate,
+                    onPanEnd: widget.isLocked ? null : _onBodyPanEnd,
+                    child: paintedBody,
+                  ),
           ),
           // Resize edge — full width strip at the bottom, OUTSIDE ClipPath
           if (showResize)
