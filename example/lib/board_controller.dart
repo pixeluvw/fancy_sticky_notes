@@ -247,7 +247,7 @@ class BoardController extends NeuronController {
       color: color,
       width: width,
       height: height,
-      textController: TextEditingController(text: text),
+      textController: StyledTextController(text: text),
       fontSize: fontSize,
       fontWeight: fontWeight,
       textColor: textColor,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'sticky_note_style.dart';
 import 'sticky_note_painter.dart';
+import 'styled_text_controller.dart';
 import 'sticky_note_board.dart' show fontStyleFor;
 
 /// Height of the resize edge strip along the bottom of the note.
@@ -17,34 +18,91 @@ const double _kResizeEdgeHeight = 14.0;
 /// - Space + left-drag on body → rotate
 /// - Double-tap → edit
 class StickyNote extends StatefulWidget {
+  /// Custom child widget displayed instead of the text field.
   final Widget? child;
+
+  /// Controller for the editable text content.
   final TextEditingController? textController;
+
+  /// Focus node for keyboard focus management.
   final FocusNode? focusNode;
+
+  /// Whether the text field is currently editable.
   final bool isEditing;
+
+  /// Base font size in logical pixels.
   final double fontSize;
+
+  /// Base font weight (used as default when not using [StyledTextController]).
   final FontWeight fontWeight;
+
+  /// Text color applied to the content.
   final Color textColor;
+
+  /// Text alignment within the note.
   final TextAlign textAlign;
+
+  /// Font family name — one of the supported Google Fonts or `'Default'`.
   final String fontFamily;
+
+  /// Whether to apply strikethrough to all text (plain controller only).
   final bool strikethrough;
+
+  /// Whether to apply underline to all text (plain controller only).
   final bool underline;
+
+  /// Whether to apply italic to all text (plain controller only).
   final bool italic;
+
+  /// Whether this note is currently focused (shows resize handle).
   final bool isFocused;
+
+  /// Whether the note is locked (prevents drag, resize, rotate).
   final bool isLocked;
+
+  /// Whether to show a pin indicator on the note.
   final bool isPinned;
+
+  /// Whether the note is collapsed to a single-line strip.
   final bool isMinimized;
+
+  /// Use a fully rounded rectangle shape instead of the paper-curl shape.
   final bool roundCorners;
+
+  /// Note opacity from 0.0 (transparent) to 1.0 (opaque).
   final double opacity;
+
+  /// Called with delta offset when the bottom resize edge is dragged.
   final ValueChanged<Offset>? onResize;
+
+  /// Called with delta angle during Space+drag rotation.
   final ValueChanged<double>? onRotate;
+
+  /// Called with delta offset during left-drag on the note body.
   final ValueChanged<Offset>? onDrag;
+
+  /// Called on single tap.
   final VoidCallback? onTap;
+
+  /// Called on double-tap (typically enters edit mode).
   final VoidCallback? onDoubleTap;
+
+  /// Visual style preset for the note background.
   final StickyNoteStyle style;
+
+  /// Background color of the note.
   final Color color;
+
+  /// Note width in logical pixels.
   final double width;
+
+  /// Note height in logical pixels.
   final double height;
+
+  /// Rotation angle in radians.
   final double rotation;
+
+  /// Optional texture image overlay (used with [StickyNoteStyle.textured]).
   final ImageProvider? texture;
 
   const StickyNote({
@@ -135,21 +193,27 @@ class _StickyNoteState extends State<StickyNote> {
     final effectiveHeight = widget.isMinimized ? 36.0 : widget.height;
 
     // ── Text style ───────────────────────────────────────────────────
+    // Base style: font, size, color, weight.
+    // When using StyledTextController, inline formatting (bold, italic,
+    // underline, strikethrough) is handled per-character by the controller.
+    // For plain TextEditingController, note-level flags still apply.
     var textStyle = fontStyleFor(
       widget.fontFamily,
       fontSize: widget.fontSize,
       fontWeight: widget.fontWeight,
       color: widget.textColor,
     );
-    if (widget.italic) {
-      textStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
-    }
-    final decs = <TextDecoration>[
-      if (widget.strikethrough) TextDecoration.lineThrough,
-      if (widget.underline) TextDecoration.underline,
-    ];
-    if (decs.isNotEmpty) {
-      textStyle = textStyle.copyWith(decoration: TextDecoration.combine(decs));
+    if (widget.textController is! StyledTextController) {
+      if (widget.italic) {
+        textStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
+      }
+      final decs = <TextDecoration>[
+        if (widget.strikethrough) TextDecoration.lineThrough,
+        if (widget.underline) TextDecoration.underline,
+      ];
+      if (decs.isNotEmpty) {
+        textStyle = textStyle.copyWith(decoration: TextDecoration.combine(decs));
+      }
     }
 
     // ── Content ──────────────────────────────────────────────────────

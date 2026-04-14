@@ -10,10 +10,18 @@ const double kNoteCornerRadius = 8.0;
 /// Fully rounded corner radius.
 const double kNoteRoundRadius = 20.0;
 
+/// Paints the sticky note background, shadow, and decorative style overlay.
 class StickyNotePainter extends CustomPainter {
+  /// The visual style preset that determines the decorative overlay.
   final StickyNoteStyle style;
+
+  /// Background color of the note.
   final Color color;
+
+  /// Current rotation angle in radians (affects shadow offset).
   final double rotation;
+
+  /// Whether to use a fully rounded rectangle instead of the paper-curl shape.
   final bool roundCorners;
 
   StickyNotePainter({
@@ -243,9 +251,12 @@ class StickyNotePainter extends CustomPainter {
       oldDelegate.roundCorners != roundCorners;
 }
 
+/// Clips the note content to the [StickyNotePainter.paperPath] shape.
 class StickyNoteClipper extends CustomClipper<Path> {
+  /// Whether to clip to a fully rounded rectangle.
   final bool roundCorners;
 
+  /// Creates a clipper matching the note's paper shape.
   StickyNoteClipper({this.roundCorners = false});
 
   @override

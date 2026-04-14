@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'sticky_note_style.dart';
+import 'styled_text_controller.dart';
 import 'sticky_note.dart';
 
 /// Preset text colors for the color picker.
@@ -67,38 +68,80 @@ TextStyle fontStyleFor(String family, {double? fontSize, FontWeight? fontWeight,
   }
 }
 
-/// Model representing the state of a single sticky note on the board.
+/// Mutable data model representing a single sticky note on the board.
+///
+/// Use with [StickyNoteBoard] or pass individual fields to a [StickyNote].
+/// For per-character inline formatting, supply a [StyledTextController]
+/// as the [textController].
 class StickyNoteModel {
+  /// Unique identifier for the note.
   final String id;
+
+  /// Position of the note's top-left corner on the board.
   Offset position;
+
+  /// Rotation angle in radians.
   double rotation;
+
+  /// Note width in logical pixels.
   double width;
+
+  /// Note height in logical pixels.
   double height;
+
+  /// Optional custom child widget (displayed instead of the text field).
   final Widget? child;
 
-  // Text editing
+  /// Controller for editable text. Use [StyledTextController] for
+  /// per-selection inline formatting (bold, italic, underline, strikethrough).
   final TextEditingController? textController;
+
+  /// Focus node managed internally by the board.
   final FocusNode focusNode = FocusNode();
+
+  /// Whether the note is currently in text-editing mode.
   bool isEditing;
+
+  /// Base font size in logical pixels.
   double fontSize;
+
+  /// Base font weight for all text.
   FontWeight fontWeight;
+
+  /// Text color.
   Color textColor;
+
+  /// Text alignment within the note.
   TextAlign textAlign;
+
+  /// Font family name (Google Fonts or `'Default'`).
   String fontFamily;
 
-  // Text decoration
+  /// Note-level strikethrough flag (plain controller only).
   bool strikethrough;
+
+  /// Note-level underline flag (plain controller only).
   bool underline;
+
+  /// Note-level italic flag (plain controller only).
   bool italic;
 
-  // Lock & visual
+  /// Whether the note is locked (prevents move, resize, rotate).
   bool isLocked;
+
+  /// Whether to use fully rounded corners.
   bool roundCorners;
+
+  /// Whether bullet-list prefixes are active.
   bool bulletList;
 
-  // Visual
+  /// Visual style preset for the note background.
   final StickyNoteStyle style;
+
+  /// Background color of the note (mutable via the toolbar).
   Color color;
+
+  /// Optional texture image for the [StickyNoteStyle.textured] style.
   final ImageProvider? texture;
 
   StickyNoteModel({
@@ -130,7 +173,10 @@ class StickyNoteModel {
 /// A board that manages multiple sticky notes with dragging, resizing,
 /// rotation, locking, font switching, and a floating text formatting toolbar.
 class StickyNoteBoard extends StatefulWidget {
+  /// The initial list of notes to display on the board.
   final List<StickyNoteModel> initialNotes;
+
+  /// Optional background widget rendered behind all notes.
   final Widget? background;
 
   const StickyNoteBoard({
@@ -323,7 +369,7 @@ class _StickyNoteBoardState extends State<StickyNoteBoard> {
 
 const Color _kActive = Color(0xFF1565C0);
 
-class _FloatingToolbar extends StatelessWidget {
+class _FloatingToolbar extends StatefulWidget {
   final StickyNoteModel note;
   final VoidCallback onChanged;
   final VoidCallback onToggleBulletList;
@@ -335,7 +381,70 @@ class _FloatingToolbar extends StatelessWidget {
   });
 
   @override
+  State<_FloatingToolbar> createState() => _FloatingToolbarState();
+}
+
+class _FloatingToolbarState extends State<_FloatingToolbar> {
+  StyledTextController? _styledCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FloatingToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.note.textController != widget.note.textController) {
+      _unbindController();
+      _bindController();
+    }
+  }
+
+  void _bindController() {
+    final ctrl = widget.note.textController;
+    if (ctrl is StyledTextController) {
+      _styledCtrl = ctrl;
+      _styledCtrl!.addListener(_onControllerChanged);
+    }
+  }
+
+  void _unbindController() {
+    _styledCtrl?.removeListener(_onControllerChanged);
+    _styledCtrl = null;
+  }
+
+  void _onControllerChanged() {
+    // Rebuild to update B/I/U/S active states when selection moves
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _unbindController();
+    super.dispose();
+  }
+
+  // ── Inline style helpers ───────────────────────────────────────────
+
+  bool _isStyleActive(InlineStyle style) {
+    return _styledCtrl?.selectionHasStyle(style) ?? false;
+  }
+
+  void _toggle(InlineStyle style) {
+    _styledCtrl?.toggleStyle(style);
+    widget.onChanged();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final note = widget.note;
+    final onChanged = widget.onChanged;
+    final hasSelection = _styledCtrl != null &&
+        _styledCtrl!.selection.isValid &&
+        !_styledCtrl!.selection.isCollapsed;
+
     return Material(
       elevation: 10,
       borderRadius: BorderRadius.circular(16),
@@ -375,19 +484,23 @@ class _FloatingToolbar extends StatelessWidget {
                   const SizedBox(width: 4),
                   _hDiv(),
                   const SizedBox(width: 4),
-                  // Bold / Italic / Underline / Strikethrough
-                  _toggleIcon(Icons.format_bold, 'Bold',
-                    note.fontWeight == FontWeight.bold, () {
-                      note.fontWeight = note.fontWeight == FontWeight.bold
-                          ? FontWeight.normal : FontWeight.bold;
-                      onChanged();
-                    }),
-                  _toggleIcon(Icons.format_italic, 'Italic',
-                    note.italic, () { note.italic = !note.italic; onChanged(); }),
-                  _toggleIcon(Icons.format_underlined, 'Underline',
-                    note.underline, () { note.underline = !note.underline; onChanged(); }),
-                  _toggleIcon(Icons.format_strikethrough, 'Strikethrough',
-                    note.strikethrough, () { note.strikethrough = !note.strikethrough; onChanged(); }),
+                  // Bold / Italic / Underline / Strikethrough — per selection
+                  _toggleIcon(Icons.format_bold,
+                    hasSelection ? 'Bold selection' : 'Select text first',
+                    _isStyleActive(InlineStyle.bold),
+                    hasSelection ? () => _toggle(InlineStyle.bold) : null),
+                  _toggleIcon(Icons.format_italic,
+                    hasSelection ? 'Italic selection' : 'Select text first',
+                    _isStyleActive(InlineStyle.italic),
+                    hasSelection ? () => _toggle(InlineStyle.italic) : null),
+                  _toggleIcon(Icons.format_underlined,
+                    hasSelection ? 'Underline selection' : 'Select text first',
+                    _isStyleActive(InlineStyle.underline),
+                    hasSelection ? () => _toggle(InlineStyle.underline) : null),
+                  _toggleIcon(Icons.format_strikethrough,
+                    hasSelection ? 'Strikethrough selection' : 'Select text first',
+                    _isStyleActive(InlineStyle.strikethrough),
+                    hasSelection ? () => _toggle(InlineStyle.strikethrough) : null),
                   const SizedBox(width: 4),
                   _hDiv(),
                   const SizedBox(width: 4),
@@ -432,7 +545,7 @@ class _FloatingToolbar extends StatelessWidget {
                   _hDiv(),
                   const SizedBox(width: 4),
                   // Pills
-                  _pill(Icons.format_list_bulleted, 'List', note.bulletList, onToggleBulletList),
+                  _pill(Icons.format_list_bulleted, 'List', note.bulletList, widget.onToggleBulletList),
                   const SizedBox(width: 6),
                   _pill(Icons.rounded_corner, 'Round', note.roundCorners, () {
                     note.roundCorners = !note.roundCorners; onChanged();
@@ -473,7 +586,6 @@ class _FloatingToolbar extends StatelessWidget {
 
   // ── Building Blocks ────────────────────────────────────────────────────
 
-  /// A simple tappable icon (no active background).
   static Widget _tapIcon(IconData icon, String tooltip, Color? tint, VoidCallback onTap) {
     return Tooltip(
       message: tooltip,
@@ -489,8 +601,8 @@ class _FloatingToolbar extends StatelessWidget {
     );
   }
 
-  /// A toggle icon with a tinted background when active.
-  static Widget _toggleIcon(IconData icon, String tooltip, bool active, VoidCallback onTap) {
+  static Widget _toggleIcon(IconData icon, String tooltip, bool active, VoidCallback? onTap) {
+    final enabled = onTap != null;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -503,18 +615,19 @@ class _FloatingToolbar extends StatelessWidget {
             color: active ? _kActive.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 20, color: active ? _kActive : Colors.grey.shade700),
+          child: Icon(icon, size: 20,
+            color: !enabled
+                ? Colors.grey.shade400
+                : active ? _kActive : Colors.grey.shade700),
         ),
       ),
     );
   }
 
-  /// Vertical thin divider between groups.
   static Widget _hDiv() {
     return Container(width: 1, height: 24, color: Colors.grey.shade300);
   }
 
-  /// Pill-shaped toggle with icon + label.
   static Widget _pill(
     IconData icon, String label, bool active, VoidCallback onTap, {
     Color activeColor = _kActive,

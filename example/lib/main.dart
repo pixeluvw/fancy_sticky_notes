@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return NeuronApp(
       title: 'Fancy Sticky Notes Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

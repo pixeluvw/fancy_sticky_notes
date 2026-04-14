@@ -1,3 +1,10 @@
+## 0.2.0
+
+* Added `StyledTextController` for per-selection inline formatting (bold, italic, underline, strikethrough)
+* Toolbar formatting now applies to selected text only, not the entire note
+* Added dartdoc comments to all public API members
+* Toolbar B/I/U/S buttons show disabled state when no text is selected
+
 ## 0.1.0
 
 * Initial release

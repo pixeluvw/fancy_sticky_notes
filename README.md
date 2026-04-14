@@ -22,40 +22,39 @@ A fully-featured sticky note widget package for Flutter. Create beautiful, inter
 
 ## Getting Started
 
-Add the dependency to your `pubspec.yaml`:
+Add the dependencies to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   fancy_sticky_notes: ^0.1.0
+  neuron: ^1.6.1
 ```
 
-Then import the package:
+Then import the packages:
 
 ```dart
 import 'package:fancy_sticky_notes/fancy_sticky_notes.dart';
+import 'package:neuron/neuron.dart';
 ```
 
 ## Usage
 
-### Quick Start — StickyNoteBoard
+### Quick Start with Neuron
 
-The simplest way to use the package. `StickyNoteBoard` manages multiple notes with full interactivity built in.
+The recommended way to use this package is with [Neuron](https://pub.dev/packages/neuron) state management. Create a controller to manage your board state, then use `Slot` widgets for reactive UI.
+
+#### 1. Define a controller
 
 ```dart
-class MyBoard extends StatefulWidget {
-  const MyBoard({super.key});
+class BoardController extends NeuronController {
+  late final notes = signal<List<StickyNoteModel>>([]);
+  late final background = signal(BoardBackground.corkboard);
+  late final nextStyle = signal(StickyNoteStyle.classic);
+  late final noteCount = computed(() => notes.val.length);
 
   @override
-  State<MyBoard> createState() => _MyBoardState();
-}
-
-class _MyBoardState extends State<MyBoard> {
-  late final List<StickyNoteModel> notes;
-
-  @override
-  void initState() {
-    super.initState();
-    notes = [
+  void onInit() {
+    notes.emit([
       StickyNoteModel(
         id: 'note_1',
         position: const Offset(50, 80),
@@ -73,18 +72,100 @@ class _MyBoardState extends State<MyBoard> {
         style: StickyNoteStyle.lined,
         color: const Color(0xFFE0F7FA),
       ),
-    ];
+    ]);
   }
+
+  void addNote() {
+    final note = StickyNoteModel(
+      id: 'note_${DateTime.now().millisecondsSinceEpoch}',
+      position: Offset(100 + Random().nextDouble() * 400, 100 + Random().nextDouble() * 300),
+      style: nextStyle.val,
+      textController: TextEditingController(),
+    );
+    notes.emit([...notes.val, note]);
+  }
+
+  void removeNote(String id) {
+    notes.emit(notes.val.where((n) => n.id != id).toList());
+  }
+
+  void clearAll() => notes.emit([]);
+  void cycleBackground() { /* cycle through BoardBackground values */ }
+  void setNextStyle(StickyNoteStyle style) => nextStyle.emit(style);
+
+  static BoardController get init => Neuron.ensure(() => BoardController());
+}
+```
+
+#### 2. Bootstrap with NeuronApp
+
+```dart
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  BoardController.init;
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StickyNoteBoard(
-      initialNotes: notes,
-      background: Container(color: Colors.brown.shade100),
+    return NeuronApp(
+      title: 'Fancy Sticky Notes Demo',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.amber),
+        useMaterial3: true,
+      ),
+      home: const DemoPage(),
     );
   }
 }
 ```
+
+#### 3. Build the UI with Slot
+
+```dart
+class DemoPage extends StatelessWidget {
+  const DemoPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = BoardController.init;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Slot<int>(
+          connect: ctrl.noteCount,
+          to: (_, count) => Text('Sticky Notes ($count)'),
+        ),
+      ),
+      body: Slot<List<StickyNoteModel>>(
+        connect: ctrl.notes,
+        to: (_, noteList) => StickyNoteBoard(
+          initialNotes: noteList,
+          background: Container(color: Colors.brown.shade100),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: ctrl.addNote,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+```
+
+### Why Neuron?
+
+| Feature | StatefulWidget | Neuron |
+|---|---|---|
+| State declaration | `setState(() { ... })` | `signal<T>(value)` / `computed(() => ...)` |
+| Rebuild scope | Entire widget | Only the `Slot` wrapping the signal |
+| Boilerplate | `initState`, `dispose`, `setState` | `onInit`, auto-dispose via `register()` |
+| Multi-signal | Manual rebuild coordination | `MultiSlot.t2`...`t6` |
+| Async data | `FutureBuilder` / `StreamBuilder` | `asyncSignal` + `AsyncSlot` |
+| Singleton access | Provider / InheritedWidget | `Neuron.ensure(() => Controller())` |
 
 ### Interactions
 
@@ -100,33 +181,43 @@ class _MyBoardState extends State<MyBoard> {
 
 ### Standalone StickyNote Widget
 
-Use `StickyNote` directly for full control over state and gestures:
+Use `StickyNote` directly for full control over state and gestures. With Neuron, you can drive it with signals:
 
 ```dart
-StickyNote(
-  width: 220,
-  height: 220,
-  style: StickyNoteStyle.grid,
-  color: const Color(0xFFF3E5F5),
-  rotation: -0.04,
-  roundCorners: true,
-  fontSize: 18,
-  fontFamily: 'Indie Flower',
-  fontWeight: FontWeight.bold,
-  italic: true,
-  textColor: const Color(0xFF6A1B9A),
-  textController: myController,
-  focusNode: myFocusNode,
-  isEditing: true,
-  isFocused: true,
-  onDrag: (delta) => setState(() => position += delta),
-  onResize: (delta) => setState(() {
-    width = (width + delta.dx).clamp(120.0, 800.0);
-    height = (height + delta.dy).clamp(120.0, 800.0);
-  }),
-  onRotate: (delta) => setState(() => rotation += delta),
-  onDoubleTap: () => setState(() => isEditing = true),
-)
+class NoteController extends NeuronController {
+  late final position = signal(const Offset(100, 100));
+  late final width = signal(220.0);
+  late final height = signal(220.0);
+  late final rotation = signal(0.0);
+  late final isEditing = signal(false);
+
+  static NoteController get init => Neuron.ensure(() => NoteController());
+}
+
+// In your widget:
+final ctrl = NoteController.init;
+
+MultiSlot.t5(
+  connect: (ctrl.position, ctrl.width, ctrl.height, ctrl.rotation, ctrl.isEditing),
+  to: (_, pos, w, h, rot, editing) => StickyNote(
+    width: w,
+    height: h,
+    rotation: rot,
+    isEditing: editing,
+    isFocused: true,
+    style: StickyNoteStyle.grid,
+    color: const Color(0xFFF3E5F5),
+    fontFamily: 'Indie Flower',
+    textController: myTextController,
+    onDrag: (delta) => ctrl.position.emit(pos + delta),
+    onResize: (delta) {
+      ctrl.width.emit((w + delta.dx).clamp(120.0, 800.0));
+      ctrl.height.emit((h + delta.dy).clamp(120.0, 800.0));
+    },
+    onRotate: (delta) => ctrl.rotation.emit(rot + delta),
+    onDoubleTap: () => ctrl.isEditing.emit(true),
+  ),
+);
 ```
 
 ## API Reference
@@ -240,12 +331,14 @@ The core widget rendering a single sticky note. All gestures (drag, resize, rota
 A ready-to-use board widget that manages multiple `StickyNoteModel` instances. Provides drag-to-move, resize, rotation, z-ordering, and a floating text formatting toolbar.
 
 ```dart
-StickyNoteBoard(
-  initialNotes: myNotes,        // required: List<StickyNoteModel>
-  background: Container(        // optional: background widget
-    color: Colors.brown.shade100,
+// With Neuron — reactive rebuild when notes change
+Slot<List<StickyNoteModel>>(
+  connect: ctrl.notes,
+  to: (_, noteList) => StickyNoteBoard(
+    initialNotes: noteList,
+    background: Container(color: Colors.brown.shade100),
   ),
-)
+);
 ```
 
 #### Floating Toolbar
@@ -305,6 +398,20 @@ final style = fontStyleFor(
 | `'Gloria Hallelujah'` | Bold, expressive handwriting |
 
 ## Examples
+
+### Full example with Neuron controller
+
+The `example/` directory contains a complete app with a `BoardController` that manages:
+
+| Signal | Type | Purpose |
+|---|---|---|
+| `notes` | `Signal<List<StickyNoteModel>>` | All notes on the board |
+| `focusedNoteId` | `Signal<String?>` | Currently focused note |
+| `background` | `Signal<BoardBackground>` | Board background preset |
+| `nextStyle` | `Signal<StickyNoteStyle>` | Style for newly added notes |
+| `noteCount` | `computed` | Derived count for the app bar |
+
+Actions: `addNote()`, `removeNote(id)`, `clearAll()`, `cycleBackground()`, `setNextStyle()`
 
 ### Locked note
 
@@ -378,6 +485,11 @@ lib/
     sticky_note_painter.dart       # CustomPainter + CustomClipper
     sticky_note.dart               # StickyNote widget (StatefulWidget)
     sticky_note_board.dart         # StickyNoteBoard + StickyNoteModel + toolbar
+
+example/
+  lib/
+    board_controller.dart          # Neuron controller with signals & actions
+    main.dart                      # App bootstrap & Slot-based UI
 ```
 
 | File | Responsibility |
@@ -386,12 +498,15 @@ lib/
 | `sticky_note_painter.dart` | `StickyNotePainter` (shadow, background, style overlays), `StickyNoteClipper`, and `paperPath()` |
 | `sticky_note.dart` | `StickyNote` widget with internal gesture handling (drag, resize, rotate) |
 | `sticky_note_board.dart` | `StickyNoteBoard`, `StickyNoteModel`, `fontStyleFor()`, floating toolbar and its sub-widgets |
+| `board_controller.dart` | `BoardController` — Neuron controller managing notes, background, and style signals |
+| `main.dart` | App entry point — bootstraps controller, uses `Slot` for reactive rendering |
 
 ## Dependencies
 
 - [flutter](https://flutter.dev) (SDK)
 - [google_fonts](https://pub.dev/packages/google_fonts) — handwriting font families
+- [neuron](https://pub.dev/packages/neuron) — state management (example app)
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details.
