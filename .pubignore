@@ -1,0 +1,13 @@
+papers/
+build/
+.dart_tool/
+example/assets/
+example/android/
+example/ios/
+example/linux/
+example/macos/
+example/windows/
+example/web/
+example/test/
+example/.dart_tool/
+example/build/
