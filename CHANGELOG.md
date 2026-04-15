@@ -1,3 +1,8 @@
+## 0.2.2
+
+* Added delete note button to the floating toolbar
+* Added `onNoteDeleted` callback to `StickyNoteBoard`
+
 ## 0.2.1
 
 * Fixed text editing — TextField now receives all input when in editing mode

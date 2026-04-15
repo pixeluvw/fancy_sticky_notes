@@ -86,6 +86,7 @@ class DemoPage extends StatelessWidget {
           to: (_, noteList) => StickyNoteBoard(
             initialNotes: noteList,
             background: _backgroundWidget(bg),
+            onNoteDeleted: ctrl.removeNote,
           ),
         ),
       ),

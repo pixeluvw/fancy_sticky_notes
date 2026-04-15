@@ -179,10 +179,14 @@ class StickyNoteBoard extends StatefulWidget {
   /// Optional background widget rendered behind all notes.
   final Widget? background;
 
+  /// Called when a note is deleted via the toolbar. Receives the note [id].
+  final ValueChanged<String>? onNoteDeleted;
+
   const StickyNoteBoard({
     super.key,
     required this.initialNotes,
     this.background,
+    this.onNoteDeleted,
   });
 
   @override
@@ -215,6 +219,14 @@ class _StickyNoteBoardState extends State<StickyNoteBoard> {
         _focusedNote = null;
       });
     }
+  }
+
+  void _deleteNote(StickyNoteModel note) {
+    setState(() {
+      _notes.remove(note);
+      _focusedNote = null;
+    });
+    widget.onNoteDeleted?.call(note.id);
   }
 
   // ── Bullet list helpers ──────────────────────────────────────────────
@@ -351,6 +363,7 @@ class _StickyNoteBoardState extends State<StickyNoteBoard> {
                 note: note,
                 onChanged: () => setState(() {}),
                 onToggleBulletList: () => _toggleBulletList(note),
+                onDelete: () => _deleteNote(note),
               ),
             );
           }),
@@ -397,11 +410,13 @@ class _FloatingToolbar extends StatefulWidget {
   final StickyNoteModel note;
   final VoidCallback onChanged;
   final VoidCallback onToggleBulletList;
+  final VoidCallback onDelete;
 
   const _FloatingToolbar({
     required this.note,
     required this.onChanged,
     required this.onToggleBulletList,
+    required this.onDelete,
   });
 
   @override
@@ -610,6 +625,12 @@ class _FloatingToolbarState extends State<_FloatingToolbar> {
                     () { note.isLocked = !note.isLocked; onChanged(); },
                     activeColor: const Color(0xFFC62828),
                   ),
+                  const SizedBox(width: 4),
+                  _hDiv(),
+                  const SizedBox(width: 4),
+                  // Delete
+                  _tapIcon(Icons.delete_outline, 'Delete note',
+                    const Color(0xFFC62828), widget.onDelete),
                 ],
               ),
             ],
